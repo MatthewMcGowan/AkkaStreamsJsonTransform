@@ -3,27 +3,40 @@
   */
 import akka.stream._
 import akka.stream.scaladsl._
-
-import akka.{ NotUsed, Done }
+import akka.{Done, NotUsed}
 import akka.actor.ActorSystem
 import akka.util.ByteString
+
 import scala.concurrent._
 import scala.concurrent.duration._
 import java.nio.file.Paths
+import java.util.concurrent.atomic.AtomicLong
+
+import akka.kafka.scaladsl.Consumer
+import akka.kafka.{ConsumerSettings, Subscriptions}
+import org.apache.kafka.clients.consumer.ConsumerConfig
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, StringDeserializer}
 
 object Main extends App {
   implicit val system = ActorSystem("QuickStart")
   implicit val materializer = ActorMaterializer()
   implicit val ec = system.dispatcher
 
-  val source: Source[Int, NotUsed] = Source(1 to 100)
+  val consumerSettings = ConsumerSettings(system, new ByteArrayDeserializer, new StringDeserializer)
+    .withBootstrapServers("localhost:9092")
+    .withGroupId("group1")
+    .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
 
-  val factorials = source.scan(BigInt(1))((acc, next) => acc * next)
+  val result = Consumer.committableSource(consumerSettings, Subscriptions.topics("testIn"))
+    .mapAsync(1) { msg =>
+      println(msg.record.value())
+      Future.successful(Done).map(_ => msg)
+    }
+    .mapAsync(1) { msg =>
+      msg.committableOffset.commitScaladsl()
+    }
+    .runWith(Sink.ignore)
 
-  val result: Future[IOResult] =
-    factorials
-      .map(num => ByteString(s"$num\n"))
-      .runWith(FileIO.toPath(Paths.get("factorials.txt")))
 
   result.onComplete(_ => system.terminate())
 }
