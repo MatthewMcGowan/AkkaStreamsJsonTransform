@@ -15,17 +15,17 @@ import scala.concurrent.Future
 /**
   * Created by Matthew.McGowan on 23/08/2017.
   */
-class StreamApp {
+class StreamApp(conf: Config) {
   implicit val system = ActorSystem("QuickStart")
   implicit val materializer = ActorMaterializer()
   implicit val ec = system.dispatcher
 
-  val conf: Config = ConfigFactory.load()
   val consumerServers: String = conf.getString("kafka.in.bootstrapServers")
   val consumerGroup: String = conf.getString("kafka.in.groupId")
   val consumerTopic: String = conf.getString("kafka.in.topic")
   val producerServers: String = conf.getString("kafka.out.bootstrapServers")
   val producerTopic: String = conf.getString("kafka.out.topic")
+  val producerMaxBatch: Int = conf.getInt("kafka.out.maxBatchSize")
 
 
   private val consumerSettings = ConsumerSettings(system, new ByteArrayDeserializer, new StringDeserializer)
@@ -46,7 +46,7 @@ class StreamApp {
         ProducerMessage.Message(new ProducerRecord[Array[Byte], String](producerTopic, msg.record.value), msg.committableOffset))
       .via(Producer.flow(producerSettings))
       .map(_.message.passThrough)
-      .batch(max = 20, first => CommittableOffsetBatch.empty.updated(first)) { (batch, elem) =>
+      .batch(max = producerMaxBatch, first => CommittableOffsetBatch.empty.updated(first)) { (batch, elem) =>
         batch.updated(elem)
       }
       .mapAsync(3)(_.commitScaladsl())
