@@ -19,26 +19,21 @@ class IntegrationTests extends FunSpec with EmbeddedKafka {
 
   private val inputMessages = (1 to recordsToSend).map(i => Msg(i, s"Message$i", "x"))
 
-  private val outputMessages = {
-    var msgs: Seq[Msg] = null
+  EmbeddedKafka.start()
+  createCustomTopic(inputTopic)
+  createCustomTopic(outputTopic)
 
-    withRunningKafka {
-      createCustomTopic(inputTopic)
-      createCustomTopic(outputTopic)
+  inputMessages
+    .map(Msg.Serialise)
+    .foreach(publishToKafka(inputTopic, _))
 
-      inputMessages
-        .map(Msg.Serialise)
-        .foreach(publishToKafka(inputTopic, _))
+  new StreamApp(conf).Run()
 
-      new StreamApp(conf).Run()
+  private val outputMessages = (for (i <- 1 to recordsToSend) yield {
+    consumeFirstMessageFrom(outputTopic)
+  }).map(Msg.Deserialise)
 
-      msgs = (for (i <- 1 to recordsToSend) yield {
-        consumeFirstMessageFrom(outputTopic)
-      }).map(Msg.Deserialise)
-    }
-
-    msgs
-  }
+  EmbeddedKafka.stop()
 
   describe("The AkkaStreamsJsonTransform application") {
     describe("given a message on the input kafka topic") {
@@ -57,7 +52,7 @@ class IntegrationTests extends FunSpec with EmbeddedKafka {
           outputMessages
             .map(_.id)
             .sliding(2)
-            .forall { case Seq(x,y) => x < y }
+            .forall { case Seq(x, y) => x < y }
         )
       }
     }
