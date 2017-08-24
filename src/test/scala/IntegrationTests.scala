@@ -7,6 +7,8 @@ import org.scalatest.FunSpec
   * Created by Matthew.McGowan on 23/08/2017.
   */
 class IntegrationTests extends FunSpec with EmbeddedKafka {
+  // TODO: Remove dependency on Msg case class. Rely on JsObject instead.
+
   implicit val stringSerializer = new StringSerializer
   implicit val stringDeserializer = new StringDeserializer
 
