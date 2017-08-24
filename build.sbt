@@ -13,11 +13,17 @@ val akkaDependencies = Seq(
   "com.typesafe.akka" %% "akka-stream-kafka" % "0.16"
 )
 
+val jsonDependencies = Seq(
+  "com.typesafe.play" %% "play-json" % "2.6.3"
+)
+
 val testDependencies = Seq(
   "org.scalatest" %% "scalatest" % "3.0.1" % "test",
   "net.manub" %% "scalatest-embedded-kafka" % "0.15.1" % "test"
 )
 
-libraryDependencies ++= configDependencies
-libraryDependencies ++= akkaDependencies
-libraryDependencies ++= testDependencies
+libraryDependencies ++=
+  configDependencies ++
+    akkaDependencies ++
+    testDependencies ++
+    jsonDependencies

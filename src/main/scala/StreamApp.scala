@@ -1,16 +1,19 @@
 import akka.Done
 import akka.actor.ActorSystem
 import akka.kafka.ConsumerMessage.CommittableOffsetBatch
-import akka.kafka.{ConsumerSettings, ProducerMessage, ProducerSettings, Subscriptions}
 import akka.kafka.scaladsl.{Consumer, Producer}
+import akka.kafka.{ConsumerSettings, ProducerMessage, ProducerSettings, Subscriptions}
 import akka.stream.ActorMaterializer
 import akka.stream.scaladsl.Sink
-import com.typesafe.config.{Config, ConfigFactory}
+import com.typesafe.config.Config
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, StringDeserializer, StringSerializer}
+import play.api.libs.json.Reads._
+import play.api.libs.json.{JsString, JsValue, Json, _}
 
 import scala.concurrent.Future
+import scala.util.Try
 
 /**
   * Created by Matthew.McGowan on 23/08/2017.
@@ -39,11 +42,25 @@ class StreamApp(conf: Config) {
   def Run(): Unit = {
     val done = Consumer.committableSource(consumerSettings, Subscriptions.topics(consumerTopic))
       .mapAsync(1) { msg =>
-        println(msg.record.value())
-        Future.successful(Done).map(_ => msg)
+
+        def modifyJsonMessage(json: JsValue): Option[JsValue] = {
+          val transform = (__ \ 'message).json.update(
+            __.read[JsString].map{m => JsString("updated")}
+          )
+
+          json.transform(transform).asOpt
+        }
+
+        val j = Try(Json.parse(msg.record.value())).toOption
+          .flatMap(j => modifyJsonMessage(j))
+          .map(Json.stringify)
+          .getOrElse(msg.record.value())
+
+        println(s"${msg.record.value()} transformed to $j")
+        Future.successful(Done).map(_ => (j, msg.committableOffset))
       }
       .map(msg =>
-        ProducerMessage.Message(new ProducerRecord[Array[Byte], String](producerTopic, msg.record.value), msg.committableOffset))
+        ProducerMessage.Message(new ProducerRecord[Array[Byte], String](producerTopic, msg._1), msg._2))
       .via(Producer.flow(producerSettings))
       .map(_.message.passThrough)
       .batch(max = producerMaxBatch, first => CommittableOffsetBatch.empty.updated(first)) { (batch, elem) =>
