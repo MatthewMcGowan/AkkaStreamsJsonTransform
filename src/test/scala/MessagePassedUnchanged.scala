@@ -18,7 +18,8 @@ class MessagePassedUnchanged extends FunSpec with EmbeddedKafka {
     describe("given a message on the input kafka topic") {
       it("should place the message unchanged on the output kakfa topic") {
         withRunningKafka {
-          SetUpTopics()
+          createCustomTopic(inputTopic)
+          createCustomTopic(outputTopic)
           publishToKafka(inputTopic, "TestMessage")
 
           val stream = new StreamApp(conf)
@@ -50,10 +51,5 @@ class MessagePassedUnchanged extends FunSpec with EmbeddedKafka {
         }
       }
     }
-  }
-
-  def SetUpTopics(): Unit = {
-    createCustomTopic(inputTopic)
-    createCustomTopic(outputTopic)
   }
 }
